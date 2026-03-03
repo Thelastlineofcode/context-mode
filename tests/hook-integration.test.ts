@@ -9,6 +9,8 @@ import { strict as assert } from "node:assert";
 import { spawnSync } from "node:child_process";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { mkdirSync, writeFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const HOOK_PATH = join(__dirname, "..", "hooks", "pretooluse.mjs");
@@ -45,11 +47,12 @@ interface HookResult {
   stderr: string;
 }
 
-function runHook(input: Record<string, unknown>): HookResult {
+function runHook(input: Record<string, unknown>, env?: Record<string, string>): HookResult {
   const result = spawnSync("node", [HOOK_PATH], {
     input: JSON.stringify(input),
     encoding: "utf-8",
     timeout: 5000,
+    env: { ...process.env, ...env },
   });
   return {
     exitCode: result.status ?? 1,
@@ -330,6 +333,154 @@ async function main() {
     });
     assertPassthrough(result);
   });
+
+  // ===== SECURITY POLICY ENFORCEMENT =====
+  console.log("\n--- Security Policy Enforcement ---\n");
+
+  // Set up isolated temp dirs for security tests
+  const ISOLATED_HOME = join(tmpdir(), `hook-sec-home-${Date.now()}`);
+  const MOCK_PROJECT_DIR = join(tmpdir(), `hook-sec-project-${Date.now()}`);
+  const mockClaudeDir = join(MOCK_PROJECT_DIR, ".claude");
+  mkdirSync(join(ISOLATED_HOME, ".claude"), { recursive: true });
+  mkdirSync(mockClaudeDir, { recursive: true });
+
+  // Write deny/allow patterns to project settings
+  writeFileSync(
+    join(mockClaudeDir, "settings.json"),
+    JSON.stringify({
+      permissions: {
+        deny: ["Bash(sudo *)", "Bash(rm -rf /*)", "Read(.env)", "Read(**/.env*)"],
+        allow: ["Bash(git:*)", "Bash(ls:*)"],
+      },
+    }),
+  );
+
+  const secEnv = { HOME: ISOLATED_HOME, CLAUDE_PROJECT_DIR: MOCK_PROJECT_DIR };
+
+  await test("Security: Bash + sudo denied by deny pattern", () => {
+    const result = runHook(
+      { tool_name: "Bash", tool_input: { command: "sudo apt install vim" } },
+      secEnv,
+    );
+    assert.equal(result.exitCode, 0);
+    const parsed = JSON.parse(result.stdout);
+    assert.equal(parsed.hookSpecificOutput.permissionDecision, "deny");
+    assert.ok(parsed.hookSpecificOutput.reason.includes("deny pattern"));
+  });
+
+  await test("Security: Bash + git allowed, falls through to Stage 2", () => {
+    const result = runHook(
+      { tool_name: "Bash", tool_input: { command: "git status" } },
+      secEnv,
+    );
+    // git is in allow list → falls through to Stage 2 routing
+    // Stage 2: git is not curl/wget/fetch → passthrough (exit 0, empty stdout)
+    assert.equal(result.exitCode, 0);
+    assert.equal(result.stdout, "", "Allowed command should passthrough to Stage 2");
+  });
+
+  await test("Security: MCP execute + shell + sudo denied", () => {
+    const result = runHook(
+      {
+        tool_name: "mcp__plugin_context-mode_context-mode__execute",
+        tool_input: { language: "shell", code: "sudo rm -rf /" },
+      },
+      secEnv,
+    );
+    assert.equal(result.exitCode, 0);
+    const parsed = JSON.parse(result.stdout);
+    assert.equal(parsed.hookSpecificOutput.permissionDecision, "deny");
+  });
+
+  await test("Security: MCP execute + python (non-shell) passthrough", () => {
+    const result = runHook(
+      {
+        tool_name: "mcp__plugin_context-mode_context-mode__execute",
+        tool_input: { language: "python", code: "print('hello')" },
+      },
+      secEnv,
+    );
+    assert.equal(result.exitCode, 0);
+    assert.equal(result.stdout, "", "Non-shell language should passthrough");
+  });
+
+  await test("Security: MCP execute_file + .env path denied", () => {
+    const result = runHook(
+      {
+        tool_name: "mcp__plugin_context-mode_context-mode__execute_file",
+        tool_input: { path: ".env", language: "shell", code: "cat" },
+      },
+      secEnv,
+    );
+    assert.equal(result.exitCode, 0);
+    const parsed = JSON.parse(result.stdout);
+    assert.equal(parsed.hookSpecificOutput.permissionDecision, "deny");
+    assert.ok(parsed.hookSpecificOutput.reason.includes("Read deny pattern"));
+  });
+
+  await test("Security: MCP execute_file + safe path passthrough", () => {
+    const result = runHook(
+      {
+        tool_name: "mcp__plugin_context-mode_context-mode__execute_file",
+        tool_input: { path: "src/app.ts", language: "javascript", code: "console.log('ok')" },
+      },
+      secEnv,
+    );
+    assert.equal(result.exitCode, 0);
+    assert.equal(result.stdout, "", "Safe path should passthrough");
+  });
+
+  await test("Security: MCP execute_file + safe path but sudo in shell code denied", () => {
+    const result = runHook(
+      {
+        tool_name: "mcp__plugin_context-mode_context-mode__execute_file",
+        tool_input: { path: "src/app.sh", language: "shell", code: "sudo rm -rf /" },
+      },
+      secEnv,
+    );
+    assert.equal(result.exitCode, 0);
+    const parsed = JSON.parse(result.stdout);
+    assert.equal(parsed.hookSpecificOutput.permissionDecision, "deny");
+  });
+
+  await test("Security: MCP batch_execute with sudo in one command denied", () => {
+    const result = runHook(
+      {
+        tool_name: "mcp__plugin_context-mode_context-mode__batch_execute",
+        tool_input: {
+          commands: [
+            { label: "list", command: "ls -la" },
+            { label: "evil", command: "sudo rm -rf /" },
+          ],
+        },
+      },
+      secEnv,
+    );
+    assert.equal(result.exitCode, 0);
+    const parsed = JSON.parse(result.stdout);
+    assert.equal(parsed.hookSpecificOutput.permissionDecision, "deny");
+  });
+
+  await test("Security: MCP batch_execute with all allowed commands passthrough", () => {
+    const result = runHook(
+      {
+        tool_name: "mcp__plugin_context-mode_context-mode__batch_execute",
+        tool_input: {
+          commands: [
+            { label: "list", command: "ls -la" },
+            { label: "git", command: "git log --oneline -5" },
+          ],
+        },
+      },
+      secEnv,
+    );
+    assert.equal(result.exitCode, 0);
+    assert.equal(result.stdout, "", "All allowed commands should passthrough");
+  });
+
+  // Clean up temp dirs
+  try { rmSync(ISOLATED_HOME, { recursive: true, force: true }); } catch {}
+  try { rmSync(MOCK_PROJECT_DIR, { recursive: true, force: true }); } catch {}
 
   // ===== SUMMARY =====
   console.log("\n" + "=".repeat(60));

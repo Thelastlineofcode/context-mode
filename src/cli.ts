@@ -29,7 +29,7 @@ const args = process.argv.slice(2);
 if (args[0] === "setup") {
   setup();
 } else if (args[0] === "doctor") {
-  doctor().then((code) => { process.exitCode = code; });
+  doctor().then((code) => process.exit(code));
 } else if (args[0] === "upgrade") {
   upgrade();
 } else {
@@ -596,7 +596,7 @@ async function upgrade() {
   const settings = readSettings() ?? {};
 
   const desiredHookEntry = {
-    matcher: "Bash|Read|Grep|Glob|WebFetch|WebSearch|Task",
+    matcher: "Bash|Read|Grep|WebFetch|Task|mcp__plugin_context-mode_context-mode__execute|mcp__plugin_context-mode_context-mode__execute_file|mcp__plugin_context-mode_context-mode__batch_execute",
     hooks: [
       {
         type: "command",
