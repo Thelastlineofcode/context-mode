@@ -110,6 +110,18 @@ export class SessionDB extends SQLiteBase {
   // ── Schema ──
 
   protected initSchema(): void {
+    // ── Migration: fix data_hash generated column from older schema ──
+    // Old schema had data_hash as GENERATED ALWAYS AS — new schema uses explicit INSERT.
+    // Detect and recreate table if needed (session data is ephemeral, safe to drop).
+    try {
+      const colInfo = this.db.pragma("table_xinfo(session_events)") as Array<{ name: string; hidden: number }>;
+      const hashCol = colInfo.find((c) => c.name === "data_hash");
+      if (hashCol && hashCol.hidden !== 0) {
+        // hidden != 0 means generated column — must recreate
+        this.db.exec("DROP TABLE session_events");
+      }
+    } catch { /* table doesn't exist yet — fine */ }
+
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS session_events (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
