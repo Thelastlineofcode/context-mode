@@ -1,6 +1,5 @@
 #!/usr/bin/env node
-// Suppress stderr — native modules emit warnings that platforms interpret as hook failure. See: #68
-process.stderr.write = () => true;
+import "../suppress-stderr.mjs";
 /**
  * VS Code Copilot PreToolUse hook for context-mode
  * Thin wrapper — uses shared routing core, no self-heal, no Claude Code-specific logic.

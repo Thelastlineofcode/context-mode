@@ -1,6 +1,5 @@
 #!/usr/bin/env node
-// Suppress stderr — native modules emit warnings that platforms interpret as hook failure. See: #68
-process.stderr.write = () => true;
+import "./suppress-stderr.mjs";
 /**
  * Unified PreToolUse hook for context-mode (Claude Code)
  * Redirects data-fetching tools to context-mode MCP tools

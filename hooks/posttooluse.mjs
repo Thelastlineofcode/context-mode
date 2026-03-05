@@ -1,6 +1,5 @@
 #!/usr/bin/env node
-// Suppress stderr — native modules emit warnings that platforms interpret as hook failure. See: #68
-process.stderr.write = () => true;
+import "./suppress-stderr.mjs";
 /**
  * PostToolUse hook for context-mode session continuity.
  *

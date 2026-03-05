@@ -15,9 +15,9 @@
 import * as p from "@clack/prompts";
 import color from "picocolors";
 import { execSync } from "node:child_process";
-import { readFileSync, cpSync, accessSync, readdirSync, rmSync, constants } from "node:fs";
+import { readFileSync, cpSync, accessSync, readdirSync, rmSync, closeSync, openSync, constants } from "node:fs";
 import { resolve, dirname, join } from "node:path";
-import { tmpdir } from "node:os";
+import { tmpdir, devNull } from "node:os";
 import { fileURLToPath } from "node:url";
 import {
   detectRuntimes,
@@ -57,11 +57,16 @@ const HOOK_MAP: Record<string, Record<string, string>> = {
 };
 
 async function hookDispatch(platform: string, event: string): Promise<void> {
-  // Suppress stderr — native C++ modules (better-sqlite3) emit warnings to
-  // stderr during initialization. Platforms like Claude Code interpret ANY
-  // stderr output as hook failure, even when the hook succeeds. See: #68
-  // This is cross-platform (works on Windows, Linux, macOS).
-  process.stderr.write = (() => true) as typeof process.stderr.write;
+  // Suppress stderr at OS fd level — native C++ modules (better-sqlite3) write
+  // directly to fd 2 during initialization, bypassing Node.js process.stderr.
+  // Platforms like Claude Code interpret ANY stderr output as hook failure.
+  // Cross-platform: os.devNull → /dev/null (Unix) or \\.\NUL (Windows). See: #68
+  try {
+    closeSync(2);
+    openSync(devNull, "w"); // Acquires fd 2 (lowest available)
+  } catch {
+    process.stderr.write = (() => true) as typeof process.stderr.write;
+  }
 
   const scriptPath = HOOK_MAP[platform]?.[event];
   if (!scriptPath) {
