@@ -9,7 +9,7 @@
  * OpenClaw hook system reference:
  *   - I/O: TS plugin functions via api.registerHook() and api.on()
  *   - Hook events: tool_call:before, tool_call:after, command:new, command:reset
- *   - Lifecycle: before_prompt_build, before_model_resolve
+ *   - Lifecycle: session_start, before_compaction, after_compaction, before_prompt_build, before_model_resolve
  *   - Context engine: api.registerContextEngine() with ownsCompaction
  *   - Blocking: return { block: true, blockReason } from tool_call:before
  *   - Config: openclaw.json plugins.entries, ~/.openclaw/extensions/
@@ -30,6 +30,9 @@ export const HOOK_EVENTS = {
 
 /** OpenClaw lifecycle hook names (registered via api.on). */
 export const LIFECYCLE_HOOKS = {
+  SESSION_START: "session_start",
+  BEFORE_COMPACTION: "before_compaction",
+  AFTER_COMPACTION: "after_compaction",
   BEFORE_PROMPT_BUILD: "before_prompt_build",
   BEFORE_MODEL_RESOLVE: "before_model_resolve",
   BEFORE_AGENT_START: "before_agent_start",
