@@ -494,14 +494,18 @@ export default {
           if (key) {
             try {
               const adapter = new OpenClawAdapter();
+              const openclawBase = resolve(homedir(), ".openclaw");
               // Resolve workspace dir from sessionKey (pattern: agent:<name>:*)
-              const wsMatch = key.match(/^agent:([^:]+):/);
+              // Restrict agent name to safe characters to prevent path traversal (#183)
+              const wsMatch = key.match(/^agent:([a-zA-Z0-9_-]+):/);
+              let wsDir: string;
               if (wsMatch) {
-                const wsDir = resolve(homedir(), ".openclaw", `workspace-${wsMatch[1]}`);
-                adapter.writeRoutingInstructions(wsDir, pluginRoot);
+                wsDir = resolve(openclawBase, `workspace-${wsMatch[1]}`);
               } else {
-                // Fallback: main workspace (sessionKey doesn't follow agent:<name>: pattern)
-                const wsDir = resolve(homedir(), ".openclaw", "workspace");
+                wsDir = resolve(openclawBase, "workspace");
+              }
+              // Containment check: never write outside ~/.openclaw/
+              if (wsDir.startsWith(openclawBase)) {
                 adapter.writeRoutingInstructions(wsDir, pluginRoot);
               }
             } catch {

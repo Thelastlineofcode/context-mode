@@ -150,7 +150,7 @@ export function hasBunRuntime(): boolean {
 
 export function getRuntimeSummary(runtimes: RuntimeMap): string {
   const lines: string[] = [];
-  const bunPreferred = runtimes.javascript === "bun";
+  const bunPreferred = runtimes.javascript?.endsWith("bun") ?? false;
 
   lines.push(
     `  JavaScript: ${runtimes.javascript} (${getVersion(runtimes.javascript)})${bunPreferred ? " ⚡" : ""}`,

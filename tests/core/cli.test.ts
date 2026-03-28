@@ -819,3 +819,34 @@ describe("Self-heal covers all hook types (#187)", () => {
     expect(selfHealSection).toContain("context-mode");
   });
 });
+
+// ── PR #183 fix: path traversal prevention in OpenClaw sessionKey ──
+
+describe("OpenClaw sessionKey safety (#183)", () => {
+  const OC_SOURCE = readFileSync(resolve(ROOT, "src/openclaw-plugin.ts"), "utf-8");
+
+  test("sessionKey regex only allows safe characters (no path traversal)", () => {
+    // Must use [a-zA-Z0-9_-]+ not [^:]+ to prevent ../../ in agent name
+    expect(OC_SOURCE).toContain('[a-zA-Z0-9_-]+');
+    expect(OC_SOURCE).not.toMatch(/\[\^:\]\+/);
+  });
+
+  test("workspace path has containment check against .openclaw base", () => {
+    // Must verify resolved path stays inside ~/.openclaw/
+    expect(OC_SOURCE).toContain('startsWith(');
+    expect(OC_SOURCE).toContain('.openclaw');
+  });
+});
+
+// ── PR #190 fix: getRuntimeSummary handles full bun path ──
+
+describe("Runtime summary bun detection (#190)", () => {
+  const RT_SOURCE = readFileSync(resolve(ROOT, "src/runtime.ts"), "utf-8");
+
+  test("getRuntimeSummary does not use exact === bun comparison", () => {
+    // Full path like /home/user/.bun/bin/bun must be detected
+    const summaryStart = RT_SOURCE.indexOf("getRuntimeSummary");
+    const summaryBody = RT_SOURCE.slice(summaryStart, RT_SOURCE.indexOf("\nexport", summaryStart + 10));
+    expect(summaryBody).not.toContain('=== "bun"');
+  });
+});
