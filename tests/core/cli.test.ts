@@ -82,9 +82,9 @@ describe("cli.bundle.mjs — marketplace install support", () => {
     expect(upgradeStart).toBeGreaterThan(-1);
     const upgradeSrc = src.slice(upgradeStart);
     // Must rebuild native addons between production deps and global install
-    const depsIdx = upgradeSrc.indexOf("npm install --production");
-    const rebuildIdx = upgradeSrc.indexOf('execSync("npm rebuild better-sqlite3"');
-    const globalIdx = upgradeSrc.indexOf("npm install -g");
+    const depsIdx = upgradeSrc.indexOf('"install", "--production"');
+    const rebuildIdx = upgradeSrc.indexOf('"rebuild", "better-sqlite3"');
+    const globalIdx = upgradeSrc.indexOf('"install", "-g"');
     expect(depsIdx).toBeGreaterThan(-1);
     expect(rebuildIdx).toBeGreaterThan(-1);
     expect(globalIdx).toBeGreaterThan(-1);
@@ -538,13 +538,12 @@ describe("Cross-OS compatibility", () => {
     expect(pkg.scripts["install:openclaw"]).not.toMatch(/^bash /);
   });
 
-  it("cli.ts chmod in setup/upgrade is guarded by platform check", () => {
-    // execSync('chmod +x ...') must only run on non-Windows
-    // Find the chmod +x line and check for win32 guard nearby
-    const chmodIdx = src.indexOf('chmod +x');
+  it("cli.ts chmodSync in setup/upgrade is guarded by platform check", () => {
+    // chmodSync must only run on non-Windows
+    const chmodIdx = src.indexOf('chmodSync(binPath');
     expect(chmodIdx).toBeGreaterThan(-1);
-    // Must have a platform guard before the chmod call
-    const contextBefore = src.slice(Math.max(0, chmodIdx - 300), chmodIdx);
+    // Must have a platform guard before the chmodSync call
+    const contextBefore = src.slice(Math.max(0, chmodIdx - 500), chmodIdx);
     expect(contextBefore).toMatch(/process\.platform\s*!==\s*["']win32["']/);
   });
 });
@@ -739,5 +738,44 @@ describe("Cache dir safety (#181)", () => {
     // Must contain age-gated cleanup logic (>1 hour check)
     expect(SESSION_SOURCE).toContain("lazy cleanup");
     expect(SESSION_SOURCE).toContain("3600000"); // 1 hour in ms
+  });
+});
+
+// ── Issue #185: upgrade must not use execSync (shell) ──
+
+describe("Shell-free upgrade (#185)", () => {
+  const CLI_SOURCE = readFileSync(resolve(ROOT, "src/cli.ts"), "utf-8");
+  const SERVER_SOURCE = readFileSync(resolve(ROOT, "src/server.ts"), "utf-8");
+
+  test("cli.ts upgrade function uses execFileSync, not execSync", () => {
+    // Extract upgrade function body (from "async function upgrade" to end of file)
+    const upgradeStart = CLI_SOURCE.indexOf("async function upgrade");
+    expect(upgradeStart).toBeGreaterThan(-1);
+    const upgradeBody = CLI_SOURCE.slice(upgradeStart);
+
+    // Must not contain execSync( calls (but execFileSync is fine)
+    const execSyncCalls = upgradeBody.match(/(?<!File)execSync\s*\(/g);
+    expect(execSyncCalls).toBeNull();
+  });
+
+  test("cli.ts uses chmodSync instead of execSync chmod", () => {
+    const upgradeStart = CLI_SOURCE.indexOf("async function upgrade");
+    const upgradeBody = CLI_SOURCE.slice(upgradeStart);
+
+    // Must not shell out for chmod
+    expect(upgradeBody).not.toContain('chmod +x');
+    // Must use fs.chmodSync instead
+    expect(upgradeBody).toContain("chmodSync");
+  });
+
+  test("server.ts inline fallback uses execFileSync, not execSync", () => {
+    // The inline script template must use execFileSync
+    const inlineStart = SERVER_SOURCE.indexOf("Inline fallback");
+    expect(inlineStart).toBeGreaterThan(-1);
+    const inlineSection = SERVER_SOURCE.slice(inlineStart, SERVER_SOURCE.indexOf("cmd =", inlineStart + 500));
+
+    // Generated script lines must import execFileSync
+    expect(inlineSection).toContain("execFileSync");
+    expect(inlineSection).not.toMatch(/(?<!File)execSync/);
   });
 });
