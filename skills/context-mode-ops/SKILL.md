@@ -1,12 +1,6 @@
 ---
 name: context-mode-ops
-description: |
-  Manage context-mode GitHub issues, PRs, and releases with parallel subagent army.
-  Orchestrates 10-20 dynamic agents (Architects, Staff Engineers, QA) per task.
-  Use when: "triage issue", "review PR", "release", "fix issue #N", "merge PR #N",
-  "version bump", "npm publish", "sync branches", "clean remote branches",
-  "analyze issue", "validate PR", "ship release", "issue #N", "PR #N".
-user-invocable: true
+description: Manage context-mode GitHub issues, PRs, and releases with parallel subagent army. Orchestrates 10-20 dynamic agents (Architects, Staff Engineers, QA) per task. Use when triaging issues, reviewing PRs, releasing versions, fixing bugs, merging contributions, validating ENV vars, testing adapters, or syncing branches.
 ---
 
 # Context Mode Ops
@@ -28,7 +22,7 @@ See [tdd.md](tdd.md) for the full methodology. Key rules:
 For every task:
 
 1. **Analyze** — Read the issue/PR with `gh`, classify affected domains
-2. **Recruit** — Spawn domain-specific agent teams from [agents.md](agents.md)
+2. **Recruit** — Spawn domain-specific agent teams from [agent-teams.md](agent-teams.md)
 3. **Dispatch** — ALL agents in ONE parallel batch (10-20 agents minimum)
 4. **Ping-pong** — Route Architect reviews ↔ Staff Engineer fixes
 5. **Ship** — Merge, comment, close
@@ -45,7 +39,7 @@ For every task:
 
 1. Read issue/PR body + comments + diff first
 2. Identify affected: adapters, OS, core modules
-3. Build agent roster from [agents.md](agents.md) — context-driven, not static
+3. Build agent roster from [agent-teams.md](agent-teams.md) — context-driven, not static
 4. Spawn ALL agents in ONE message with multiple `Agent` tool calls
 5. Every code-changing agent gets `isolation: "worktree"`
 6. Use context-mode MCP tools inside agents for large output
@@ -66,7 +60,7 @@ Follow [communication.md](communication.md) — be warm, technical, and always p
 ## Cross-Cutting References
 
 - [TDD Methodology](tdd.md) — Red-Green-Refactor, mandatory for all code changes
-- [Dynamic Agent Organization](agents.md)
+- [Dynamic Agent Organization](agent-teams.md)
 - [Validation Patterns](validation.md)
 - [Communication Templates](communication.md)
 

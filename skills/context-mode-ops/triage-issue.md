@@ -41,7 +41,7 @@ From the gathered intelligence, identify:
 
 ### 3. Spawn Agent Army
 
-Based on classification, spawn from [agents.md](agents.md):
+Based on classification, spawn from [agent-teams.md](agent-teams.md):
 
 ```
 ALWAYS spawn:
