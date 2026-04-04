@@ -258,8 +258,8 @@ describe("routePreToolUse with platform parameter", () => {
     }, "/tmp", "cursor");
     expect(result).not.toBeNull();
     const cmd = (result!.updatedInput as Record<string, string>).command;
-    expect(cmd).toContain("ctx_execute(language, code)");
-    expect(cmd).toContain("ctx_fetch_and_index(url, source)");
+    expect(cmd).toContain("ctx_execute");
+    expect(cmd).toContain("Think in Code");
     expect(cmd).not.toContain("mcp__");
   });
 
